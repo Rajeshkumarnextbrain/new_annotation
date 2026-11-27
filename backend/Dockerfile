@@ -8,8 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir --default-timeout=300 --retries=10 -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY app ./app
 
