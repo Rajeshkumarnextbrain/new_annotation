@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 import cv2
-import numpy as np
 
 
 def interpolate_track_boxes(
@@ -51,77 +50,19 @@ def interpolate_track_boxes(
     return results
 
 
-def _create_cv_tracker():
-    """Return OpenCV CSRT tracker (best appearance accuracy) or KCF fallback."""
-    for creator_name in ["TrackerCSRT_create", "TrackerKCF_create"]:
+def _create_kcf_tracker():
+    """Create OpenCV KCF tracker (matching reference script)."""
+    for creator_name in ["TrackerKCF_create", "TrackerCSRT_create"]:
         creator = getattr(cv2, creator_name, None)
         if creator is not None:
             return creator()
     legacy = getattr(cv2, "legacy", None)
     if legacy is not None:
-        for creator_name in ["TrackerCSRT_create", "TrackerKCF_create"]:
+        for creator_name in ["TrackerKCF_create", "TrackerCSRT_create"]:
             creator = getattr(legacy, creator_name, None)
             if creator is not None:
                 return creator()
-    return None
-
-
-def _find_motion_peak_box(
-    prev_gray: np.ndarray,
-    curr_gray: np.ndarray,
-    bx: float,
-    by: float,
-    bw: float,
-    bh: float,
-    vel: Tuple[float, float],
-) -> Tuple[bool, Tuple[float, float, float, float]]:
-    """
-    Find the best fixed-size (bw, bh) window in the search area where foreground motion
-    (absdiff) is concentrated. Never blows up box size and never locks onto static pavement.
-    """
-    fh, fw = curr_gray.shape[:2]
-    vx, vy = vel
-    pred_x = bx + vx
-    pred_y = by + vy
-
-    pad_x = max(60, int(bw * 1.5))
-    pad_y = max(40, int(bh * 0.8))
-    sx0 = max(0, int(pred_x - pad_x))
-    sy0 = max(0, int(pred_y - pad_y))
-    sx1 = min(fw, int(pred_x + bw + pad_x))
-    sy1 = min(fh, int(pred_y + bh + pad_y))
-
-    kw = max(6, int(round(bw)))
-    kh = max(6, int(round(bh)))
-    if sx1 - sx0 <= kw or sy1 - sy0 <= kh:
-        return False, (bx, by, bw, bh)
-
-    g1 = cv2.GaussianBlur(prev_gray[sy0:sy1, sx0:sx1], (5, 5), 0)
-    g2 = cv2.GaussianBlur(curr_gray[sy0:sy1, sx0:sx1], (5, 5), 0)
-    diff = cv2.absdiff(g1, g2)
-    _, mask = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)
-    mask_f = mask.astype(np.float32) / 255.0
-
-    # boxFilter computes average motion density inside every (kw, kh) window
-    density = cv2.boxFilter(mask_f, -1, (kw, kh), normalize=True, borderType=cv2.BORDER_CONSTANT)
-
-    # Valid top-left region inside search_roi
-    half_w = kw // 2
-    half_h = kh // 2
-    valid = density[half_h : density.shape[0] - (kw * 0 + (kh - half_h)), half_w : density.shape[1] - (kw - half_w)]
-    if valid.size == 0:
-        return False, (bx, by, bw, bh)
-
-    min_val, max_val, _, max_loc = cv2.minMaxLoc(valid)
-    # Require at least 6% moving pixels inside the box to confirm an actual moving object
-    if max_val < 0.06:
-        return False, (bx, by, bw, bh)
-
-    best_cx = sx0 + half_w + max_loc[0]
-    best_cy = sy0 + half_h + max_loc[1]
-    nx = max(0.0, min(float(fw - kw), float(best_cx - kw / 2.0)))
-    ny = max(0.0, min(float(fh - kh), float(best_cy - kh / 2.0)))
-    return True, (nx, ny, bw, bh)
+    raise RuntimeError("OpenCV KCF tracker is not available; install opencv-contrib-python-headless")
 
 
 def track_forward_opencv(
@@ -131,8 +72,8 @@ def track_forward_opencv(
     num_frames: int = 10,
 ) -> List[Dict[str, Any]]:
     """
-    Propagate a bounding box forward across subsequent frames using OpenCV CSRT/KCF
-    with automatic motion-peak recovery when low-FPS jumps cause background lock.
+    Propagate a bounding box forward across subsequent frames using pure OpenCV KCF
+    (matching the user's reference LabelTracker mechanism).
     """
     pos = next((i for i, f in enumerate(frames) if f["id"] == source_frame_id), None)
     if pos is None or pos + 1 >= len(frames):
@@ -144,72 +85,32 @@ def track_forward_opencv(
         return []
 
     ih, iw = img0.shape[:2]
-    bx = float(int(source_ann["x"] * iw))
-    by = float(int(source_ann["y"] * ih))
-    bw = float(max(6, int(source_ann["w"] * iw)))
-    bh = float(max(6, int(source_ann["h"] * ih)))
-    init_w, init_h = bw, bh
+    xmin = int(source_ann["x"] * iw)
+    ymin = int(source_ann["y"] * ih)
+    w = max(4, int(source_ann["w"] * iw))
+    h = max(4, int(source_ann["h"] * ih))
 
-    tracker = _create_cv_tracker()
-    if tracker is not None:
-        tracker.init(img0, (int(bx), int(by), int(bw), int(bh)))
-
-    prev_gray = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
-    curr_box = (bx, by, bw, bh)
-    vel = (0.0, 0.0)
+    tracker = _create_kcf_tracker()
+    tracker.init(img0, (xmin, ymin, w, h))
 
     tracked: List[Dict[str, Any]] = []
     target_frames = frames[pos + 1 : pos + 1 + num_frames]
 
     for f in target_frames:
-        img = cv2.imread(f["file_path"])
-        if img is None:
+        next_image = cv2.imread(f["file_path"])
+        if next_image is None:
             break
-        fh, fw = img.shape[:2]
-        curr_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        fh, fw = next_image.shape[:2]
 
-        tx, ty, tw, th = curr_box
-        ok = False
-        if tracker is not None:
-            ok, tbox = tracker.update(img)
-            if ok:
-                tx, ty, tw, th = map(float, tbox)
-
-        # Check if tracker stayed frozen on static background while motion occurred nearby
-        shift = ((tx - curr_box[0]) ** 2 + (ty - curr_box[1]) ** 2) ** 0.5
-        if (not ok) or shift < 2.0:
-            m_ok, m_box = _find_motion_peak_box(
-                prev_gray, curr_gray, curr_box[0], curr_box[1], init_w, init_h, vel
-            )
-            if m_ok:
-                m_shift = ((m_box[0] - curr_box[0]) ** 2 + (m_box[1] - curr_box[1]) ** 2) ** 0.5
-                if (not ok) or m_shift >= 4.0:
-                    tx, ty, tw, th = m_box
-                    ok = True
-                    # Re-initialize CSRT/KCF at the new position
-                    tracker = _create_cv_tracker()
-                    if tracker is not None:
-                        tracker.init(img, (int(tx), int(ty), int(tw), int(th)))
-
-        if not ok:
+        success, bbox = tracker.update(next_image.copy())
+        if not success:
             break
 
-        # Clamp size within 0.80x - 1.20x of initial box
-        cx = tx + tw / 2.0
-        cy = ty + th / 2.0
-        tw = max(6.0, max(init_w * 0.80, min(init_w * 1.20, tw)))
-        th = max(6.0, max(init_h * 0.80, min(init_h * 1.20, th)))
-        tx = max(0.0, min(float(fw) - tw, cx - tw / 2.0))
-        ty = max(0.0, min(float(fh) - th, cy - th / 2.0))
-
-        vel = (tx - curr_box[0], ty - curr_box[1])
-        curr_box = (tx, ty, tw, th)
-        prev_gray = curr_gray
-
-        nx = max(0.0, min(0.998, tx / fw))
-        ny = max(0.0, min(0.998, ty / fh))
-        nw = max(0.002, min(1.0 - nx, tw / fw))
-        nh = max(0.002, min(1.0 - ny, th / fh))
+        bx, by, bw, bh = map(int, bbox)
+        nx = max(0.0, min(0.998, bx / fw))
+        ny = max(0.0, min(0.998, by / fh))
+        nw = max(0.002, min(1.0 - nx, bw / fw))
+        nh = max(0.002, min(1.0 - ny, bh / fh))
 
         tracked.append(
             {
