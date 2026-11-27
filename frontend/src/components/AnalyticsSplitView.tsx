@@ -389,23 +389,25 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                   ? analytics.class_distribution.filter((c) => c.count > 0)
                   : analytics.class_distribution;
                 const chartItems = items.length > 0 ? items : analytics.class_distribution;
-                const chartW = Math.max(480, chartItems.length * 42);
-                const chartH = 220;
-                const padL = 40;
-                const padR = 16;
-                const padT = 22;
-                const padB = 64;
+                const chartW = Math.max(480, chartItems.length * 48);
+                const chartH = 260;
+                const padL = 44;
+                const padR = 20;
+                const padT = 24;
+                const padB = 92;
                 const plotW = chartW - padL - padR;
                 const plotH = chartH - padT - padB;
                 const barSlot = plotW / Math.max(1, chartItems.length);
-                const barW = Math.min(28, Math.max(12, barSlot * 0.62));
+                const barW = Math.min(30, Math.max(16, barSlot * 0.58));
                 const ticks = [0, 0.25, 0.5, 0.75, 1];
 
                 return (
                   <div className="bg-white border border-[#C4CCC7] p-2 overflow-x-auto">
                     <svg
+                      width={chartW}
+                      height={chartH}
                       viewBox={`0 0 ${chartW} ${chartH}`}
-                      className="w-full min-w-[440px] h-56 block"
+                      className="block"
                     >
                       {/* Horizontal Gridlines & Y-Axis Ticks */}
                       {ticks.map((t) => {
@@ -422,11 +424,11 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                               strokeWidth={1}
                             />
                             <text
-                              x={padL - 6}
-                              y={y + 3}
+                              x={padL - 8}
+                              y={y + 4}
                               textAnchor="end"
                               fill="#76817B"
-                              fontSize={9}
+                              fontSize={11}
                               fontFamily="Space Mono, monospace"
                             >
                               {val}
@@ -441,7 +443,7 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                         const x = padL + idx * barSlot + (barSlot - barW) / 2;
                         const y = padT + plotH - h;
                         const labelX = x + barW / 2;
-                        const labelY = padT + plotH + 12;
+                        const labelY = padT + plotH + 14;
                         return (
                           <g
                             key={c.class_id}
@@ -462,10 +464,10 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                             {c.count > 0 && (
                               <text
                                 x={labelX}
-                                y={y - 5}
+                                y={y - 6}
                                 textAnchor="middle"
                                 fill="#13241F"
-                                fontSize={9}
+                                fontSize={11}
                                 fontWeight="bold"
                                 fontFamily="Space Mono, monospace"
                               >
@@ -476,12 +478,12 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                               x={labelX}
                               y={labelY}
                               textAnchor="end"
-                              transform={`rotate(-35 ${labelX} ${labelY})`}
+                              transform={`rotate(-40 ${labelX} ${labelY})`}
                               fill="#13241F"
-                              fontSize={9}
+                              fontSize={11}
                               fontFamily="Space Mono, monospace"
                             >
-                              {c.name.length > 12 ? `${c.name.slice(0, 11)}…` : c.name}
+                              {c.name.length > 16 ? `${c.name.slice(0, 15)}…` : c.name}
                             </text>
                           </g>
                         );
