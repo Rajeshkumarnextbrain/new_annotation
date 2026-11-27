@@ -13,7 +13,8 @@ import {
   Wand2,
 } from 'lucide-react';
 
-type HelpTab = 'walkthrough' | 'practice' | 'shortcuts';
+type HelpTab = 'mindmap' | 'practice' | 'shortcuts';
+type BranchId = 'root' | 'project' | 'media' | 'annotate' | 'export';
 
 const SHORTCUTS = [
   { key: 'W / S', category: 'Classes', action: 'Switch to Previous / Next class (updates cursor badge)' },
@@ -34,9 +35,73 @@ const DEMO_CLASSES = [
   { name: 'helmet', color: '#10b981' },
 ];
 
+const MINDMAP_BRANCHES: {
+  id: Exclude<BranchId, 'root'>;
+  title: string;
+  subtitle: string;
+  color: string;
+  x: number;
+  y: number;
+  children: { label: string; detail: string }[];
+}[] = [
+  {
+    id: 'project',
+    title: '1. Project',
+    subtitle: 'Workspace & Smart Resume',
+    color: '#13241F',
+    x: 180,
+    y: 78,
+    children: [
+      { label: 'Create Project', detail: 'Name your workspace and lock in the 4-step pipeline.' },
+      { label: 'Smart Resume', detail: 'Auto-opens Media if videos are pending, or Annotate if ready.' },
+      { label: 'Clean Disk Delete', detail: 'Deleting a project removes DB rows + all files in data/.' },
+    ],
+  },
+  {
+    id: 'media',
+    title: '2. Media / Video',
+    subtitle: 'Strict Queue & Clipping',
+    color: '#0B7A6F',
+    x: 180,
+    y: 252,
+    children: [
+      { label: 'Auto-Clip Xs', detail: 'Scrub 1hr+ video and clip [T -> T+X] in one click.' },
+      { label: 'Use Full Video', detail: 'Extract 100% of frames from short/unclipped videos.' },
+      { label: 'One-by-One Queue', detail: 'Process each video in order before unlocking Annotate.' },
+    ],
+  },
+  {
+    id: 'annotate',
+    title: '3. Annotate & Track',
+    subtitle: '2D Canvas & KCF/CSRT',
+    color: '#E8553D',
+    x: 720,
+    y: 78,
+    children: [
+      { label: 'W / S Class Switch', detail: 'Cycle classes with live cursor badge; right-click box to edit.' },
+      { label: 'Draw (B) / Select (V)', detail: 'Drag over crowded boxes; single-click to select & resize.' },
+      { label: 'Auto-Track All (T)', detail: 'Tracks all objects on frame across 3, 5, 7, 10, or XX frames.' },
+    ],
+  },
+  {
+    id: 'export',
+    title: '4. Split & Export',
+    subtitle: 'Sequential & Rename',
+    color: '#0B7A6F',
+    x: 720,
+    y: 252,
+    children: [
+      { label: 'Sequential Split', detail: 'Non-random per-video Train -> Val -> Test frame split.' },
+      { label: 'Analytics & Heatmap', detail: 'Class balance, box sizes, and 10x10 spatial heatmap.' },
+      { label: 'Rename + YOLO .zip', detail: 'Prefix/Suffix/Full rename with /train, /val, /test & data.yaml.' },
+    ],
+  },
+];
+
 export const HelpView: React.FC = () => {
-  const [section, setSection] = useState<HelpTab>('walkthrough');
-  const [activeStep, setActiveStep] = useState<1 | 2 | 3 | 4>(1);
+  const [section, setSection] = useState<HelpTab>('mindmap');
+  const [selectedBranch, setSelectedBranch] = useState<BranchId>('media');
+  const [selectedLeaf, setSelectedLeaf] = useState<string | null>(null);
   const [shortcutFilter, setShortcutFilter] = useState('');
 
   // Interactive Step 2: Clip Simulator
@@ -65,7 +130,6 @@ export const HelpView: React.FC = () => {
   const [simRenameMode, setSimRenameMode] = useState<'none' | 'prefix' | 'suffix' | 'full'>('prefix');
   const [simRenameVal, setSimRenameVal] = useState('cam1_');
 
-  // Keyboard practice listener when on practice tab
   useEffect(() => {
     if (section !== 'practice') return;
     const onKey = (e: KeyboardEvent) => {
@@ -98,6 +162,8 @@ export const HelpView: React.FC = () => {
   const simValPct = Math.round((simVal / simTotal) * 100);
   const simTestPct = Math.max(0, 100 - simTrainPct - simValPct);
 
+  const activeBranchObj = MINDMAP_BRANCHES.find((b) => b.id === selectedBranch);
+
   return (
     <div className="max-w-6xl w-full mx-auto p-6 space-y-5">
       {/* Header */}
@@ -105,17 +171,17 @@ export const HelpView: React.FC = () => {
         <div>
           <h2 className="text-base font-bold text-[#13241F] flex items-center gap-2">
             <HelpCircle className="w-4 h-4 text-[#E8553D]" />
-            YOLO Studio — Interactive User Guide
+            YOLO Studio — Interactive Mindmap &amp; Guide
           </h2>
           <p className="text-xs text-[#76817B] mt-0.5">
-            Learn the 4-step workflow, test interactive controls, and look up keyboard shortcuts.
+            Click any node in the mindmap to explore features and try live simulators.
           </p>
         </div>
 
         <div className="flex items-center gap-1 bg-[#E2E7E4] p-1 border border-[#C4CCC7]">
           {[
-            { id: 'walkthrough', label: 'Step-by-Step Guide' },
-            { id: 'practice', label: 'Interactive Sandbox' },
+            { id: 'mindmap', label: 'Workflow Mindmap' },
+            { id: 'practice', label: 'Canvas Sandbox' },
             { id: 'shortcuts', label: 'All Shortcuts' },
           ].map((t) => (
             <button
@@ -133,306 +199,397 @@ export const HelpView: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 1: STEP-BY-STEP INTERACTIVE WALKTHROUGH */}
-      {section === 'walkthrough' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Step Selector */}
-          <div className="lg:col-span-4 space-y-2">
-            {[
-              {
-                num: 1 as const,
-                title: '1. Create or Open Project',
-                icon: FolderKanban,
-                summary: 'Start a workspace & auto-resume where you left off.',
-              },
-              {
-                num: 2 as const,
-                title: '2. Import & Clip Media',
-                icon: Film,
-                summary: 'Add videos or image folders. Process videos one-by-one.',
-              },
-              {
-                num: 3 as const,
-                title: '3. Annotate & Auto-Track',
-                icon: PenTool,
-                summary: 'Draw 2D boxes, switch classes with W/S, track all with T.',
-              },
-              {
-                num: 4 as const,
-                title: '4. Split, Rename & Export',
-                icon: BarChart3,
-                summary: 'Sequential Train/Val/Test split, analytics & YOLO .zip.',
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-              const active = activeStep === item.num;
-              return (
-                <button
-                  key={item.num}
-                  onClick={() => setActiveStep(item.num)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer border-l-4 ${
-                    active
-                      ? 'bg-white border-[#C4CCC7] border-l-[#E8553D]'
-                      : 'bg-[#EEF2EF] border-[#C4CCC7] border-l-transparent hover:bg-white/60'
-                  }`}
+      {/* SECTION 1: INTERACTIVE MINDMAP */}
+      {section === 'mindmap' && (
+        <div className="space-y-4">
+          {/* Visual SVG Mindmap Canvas */}
+          <div className="bg-[#EEF2EF] border border-[#C4CCC7] rounded-xl p-4 overflow-x-auto">
+            <div className="min-w-[860px]">
+              <svg viewBox="0 0 900 330" className="w-full h-auto block">
+                {/* Curved Connector Lines from Center (450, 165) to 4 Main Branches */}
+                {MINDMAP_BRANCHES.map((br) => {
+                  const isLeft = br.x < 450;
+                  const startX = isLeft ? 385 : 515;
+                  const startY = 165;
+                  const endX = isLeft ? br.x + 85 : br.x - 85;
+                  const endY = br.y;
+                  const ctrlX = (startX + endX) / 2;
+                  const active = selectedBranch === br.id;
+                  return (
+                    <g key={`link-${br.id}`}>
+                      <path
+                        d={`M ${startX} ${startY} C ${ctrlX} ${startY}, ${ctrlX} ${endY}, ${endX} ${endY}`}
+                        fill="none"
+                        stroke={active ? br.color : '#B0BAB4'}
+                        strokeWidth={active ? 3 : 2}
+                        strokeDasharray={active ? undefined : '4 3'}
+                      />
+                      {/* Child sub-branch connectors */}
+                      {br.children.map((ch, cIdx) => {
+                        const cy = br.y + (cIdx - 1) * 38;
+                        const cx = isLeft ? 15 : 755;
+                        const bxEdge = isLeft ? br.x - 85 : br.x + 85;
+                        const cxEdge = isLeft ? cx + 115 : cx;
+                        const mid = (bxEdge + cxEdge) / 2;
+                        return (
+                          <path
+                            key={`${br.id}-clink-${cIdx}`}
+                            d={`M ${bxEdge} ${br.y} C ${mid} ${br.y}, ${mid} ${cy}, ${cxEdge} ${cy}`}
+                            fill="none"
+                            stroke={active ? br.color : '#C4CCC7'}
+                            strokeWidth={active ? 1.8 : 1.2}
+                          />
+                        );
+                      })}
+                    </g>
+                  );
+                })}
+
+                {/* Center Root Node */}
+                <g
+                  onClick={() => {
+                    setSelectedBranch('root');
+                    setSelectedLeaf(null);
+                  }}
+                  className="cursor-pointer"
                 >
-                  <div className="flex items-center gap-2 font-bold text-sm text-[#13241F]">
-                    <Icon className={`w-4 h-4 ${active ? 'text-[#E8553D]' : 'text-[#0B7A6F]'}`} />
-                    {item.title}
-                  </div>
-                  <p className="text-xs text-[#76817B] mt-1">{item.summary}</p>
-                </button>
-              );
-            })}
+                  <rect
+                    x={385}
+                    y={135}
+                    width={130}
+                    height={60}
+                    rx={8}
+                    fill="#13241F"
+                    stroke={selectedBranch === 'root' ? '#E8553D' : '#13241F'}
+                    strokeWidth={3}
+                  />
+                  <text
+                    x={450}
+                    y={161}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    fontSize={13}
+                    fontWeight="bold"
+                  >
+                    YOLO Studio
+                  </text>
+                  <text
+                    x={450}
+                    y={179}
+                    textAnchor="middle"
+                    fill="#D8DFDB"
+                    fontSize={10}
+                    fontFamily="Space Mono, monospace"
+                  >
+                    4-STEP PIPELINE
+                  </text>
+                </g>
+
+                {/* 4 Main Branch Nodes + 12 Leaf Nodes */}
+                {MINDMAP_BRANCHES.map((br) => {
+                  const isLeft = br.x < 450;
+                  const active = selectedBranch === br.id;
+                  return (
+                    <g key={`node-${br.id}`}>
+                      <g
+                        onClick={() => {
+                          setSelectedBranch(br.id);
+                          setSelectedLeaf(null);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <rect
+                          x={br.x - 85}
+                          y={br.y - 26}
+                          width={170}
+                          height={52}
+                          rx={6}
+                          fill={active ? br.color : '#FFFFFF'}
+                          stroke={br.color}
+                          strokeWidth={active ? 2.5 : 1.5}
+                        />
+                        <text
+                          x={br.x}
+                          y={br.y - 3}
+                          textAnchor="middle"
+                          fill={active ? '#FFFFFF' : '#13241F'}
+                          fontSize={12}
+                          fontWeight="bold"
+                        >
+                          {br.title}
+                        </text>
+                        <text
+                          x={br.x}
+                          y={br.y + 14}
+                          textAnchor="middle"
+                          fill={active ? '#EEF2EF' : '#76817B'}
+                          fontSize={9.5}
+                          fontFamily="Space Mono, monospace"
+                        >
+                          {br.subtitle}
+                        </text>
+                      </g>
+
+                      {/* Leaf Nodes */}
+                      {br.children.map((ch, cIdx) => {
+                        const cy = br.y + (cIdx - 1) * 38;
+                        const cx = isLeft ? 15 : 755;
+                        const leafActive = selectedBranch === br.id && selectedLeaf === ch.label;
+                        return (
+                          <g
+                            key={`${br.id}-leaf-${cIdx}`}
+                            onClick={() => {
+                              setSelectedBranch(br.id);
+                              setSelectedLeaf(ch.label);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <rect
+                              x={cx}
+                              y={cy - 14}
+                              width={130}
+                              height={28}
+                              rx={4}
+                              fill={leafActive ? '#13241F' : '#FFFFFF'}
+                              stroke={leafActive ? '#E8553D' : '#C4CCC7'}
+                              strokeWidth={leafActive ? 2 : 1}
+                            />
+                            <text
+                              x={cx + 65}
+                              y={cy + 4}
+                              textAnchor="middle"
+                              fill={leafActive ? '#FFFFFF' : '#13241F'}
+                              fontSize={10}
+                              fontFamily="Space Mono, monospace"
+                            >
+                              {ch.label}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
           </div>
 
-          {/* Step Details + Live Mini Simulator */}
-          <div className="lg:col-span-8 bg-[#EEF2EF] border border-[#C4CCC7] rounded-xl p-6 space-y-5">
-            {activeStep === 1 && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-[#13241F]">Step 1: Project Setup</h3>
-                <div className="space-y-2.5 text-xs text-[#13241F] leading-relaxed">
-                  <p>
-                    1. Enter a <strong>Project Name</strong> (e.g., <code>sami_door</code>) and click{' '}
-                    <span className="font-mono-label bg-[#E8553D] text-white px-1.5 py-0.5">+ Create</span>.
-                  </p>
-                  <p>
-                    2. <strong>Smart Resume:</strong> When you click <strong>Open →</strong> on an existing project:
-                    if it still has unprocessed videos or no frames, it opens <strong>2. Media / Video</strong>.
-                    Once all videos are processed, it opens <strong>3. Annotate</strong> directly on the first
-                    unannotated sequence.
-                  </p>
-                  <p>
-                    3. <strong>Clean Deletion:</strong> Deleting a project removes both its database records and all
-                    uploaded/extracted files from disk.
-                  </p>
-                </div>
-                <div className="bg-white border border-[#C4CCC7] p-4 space-y-2 text-xs">
-                  <div className="font-mono-label font-bold text-[#0B7A6F]">STRICT WORKFLOW GATES</div>
-                  <p className="text-[#76817B]">
-                    Tabs unlock in order so you never export empty data:
-                    <strong className="text-[#13241F]"> Project → Media/Video → Annotate → Split &amp; Export</strong>.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeStep === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-[#13241F]">
-                  Step 2: Video Clipping &amp; Image Import (Try Simulator)
+          {/* Selected Branch Inspector + Interactive Simulator */}
+          <div className="bg-[#EEF2EF] border border-[#C4CCC7] rounded-xl p-5 space-y-4">
+            {selectedBranch === 'root' && (
+              <div className="space-y-2 text-xs">
+                <h3 className="text-sm font-bold text-[#13241F]">
+                  YOLO Studio — Strict 4-Step Pipeline
                 </h3>
-                <p className="text-xs text-[#76817B]">
-                  Upload or link single/multiple videos, or import an image folder directly. When multiple videos
-                  are queued, process them <strong>one-by-one</strong> (either clip segments or click{' '}
-                  <strong>Use Full Video</strong>). Extraction keeps <strong>All Frames (Full FPS)</strong> by default.
+                <p className="text-[#76817B]">
+                  Click any node in the mindmap above (<strong>1. Project</strong>,{' '}
+                  <strong>2. Media / Video</strong>, <strong>3. Annotate &amp; Track</strong>, or{' '}
+                  <strong>4. Split &amp; Export</strong>) to inspect its workflow and try its interactive
+                  simulator.
                 </p>
-
-                {/* Interactive Quick-Clip Simulator */}
-                <div className="bg-white border border-[#C4CCC7] p-4 space-y-3">
-                  <div className="flex items-center justify-between font-mono-label text-xs">
-                    <span className="font-bold text-[#13241F]">INTERACTIVE QUICK-CLIP SIMULATOR (60s VIDEO)</span>
-                    <span className="text-[#76817B]">Playhead: {simTime}s</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={59}
-                    value={simTime}
-                    onChange={(e) => setSimTime(Number(e.target.value))}
-                    className="w-full accent-[#E8553D]"
-                  />
-                  <div className="relative h-4 bg-[#D8DFDB] border border-[#C4CCC7]">
-                    {simClips.map((c, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          left: `${(c.start / 60) * 100}%`,
-                          width: `${((c.end - c.start) / 60) * 100}%`,
-                        }}
-                        className="absolute top-0 bottom-0 bg-[#0B7A6F]/70 border-x border-[#0B7A6F]"
-                      />
-                    ))}
-                    <div
-                      style={{ left: `${(simTime / 60) * 100}%` }}
-                      className="absolute top-0 bottom-0 w-0.5 bg-[#E8553D]"
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <div className="flex items-center gap-1 font-mono-label text-xs">
-                      <span className="text-[#76817B] mr-1">Auto-Clip:</span>
-                      {[3, 5, 10].map((d) => (
-                        <button
-                          key={d}
-                          onClick={() => setSimClipDur(d)}
-                          className={`px-2 py-1 border cursor-pointer ${
-                            simClipDur === d
-                              ? 'bg-[#13241F] text-white border-[#13241F]'
-                              : 'bg-[#EEF2EF] border-[#C4CCC7] text-[#13241F]'
-                          }`}
-                        >
-                          {d}s
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          setSimClips((prev) => [
-                            ...prev,
-                            { start: simTime, end: Math.min(60, simTime + simClipDur) },
-                          ])
-                        }
-                        className="bg-[#E8553D] hover:bg-[#C83E28] text-white font-mono-label text-xs px-3 py-1.5 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Scissors className="w-3.5 h-3.5" /> Clip {simClipDur}s ({simTime}s →{' '}
-                        {Math.min(60, simTime + simClipDur)}s)
-                      </button>
-                      <button
-                        onClick={() => setSimClips([])}
-                        className="border border-[#76817B] text-[#13241F] font-mono-label text-xs px-2.5 py-1.5 cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  </div>
-                  <div className="font-mono-label text-[11px] text-[#0B7A6F]">
-                    Queued {simClips.length} clip(s) · Est.{' '}
-                    {simClips.reduce((acc, c) => acc + (c.end - c.start) * 25, 0)} frames @ 25 FPS
-                  </div>
-                </div>
               </div>
             )}
 
-            {activeStep === 3 && (
+            {activeBranchObj && (
               <div className="space-y-4">
-                <h3 className="text-base font-bold text-[#13241F]">Step 3: Annotate &amp; Motion Auto-Track</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div className="bg-white border border-[#C4CCC7] p-3.5 space-y-1.5">
-                    <div className="font-mono-label font-bold text-[#E8553D]">DRAWING &amp; EDITING</div>
-                    <ul className="space-y-1 text-[#13241F] list-disc pl-4">
-                      <li>First time opening Annotate, a popup asks you to add classes (comma-separated supported).</li>
-                      <li>Press <strong>W / S</strong> to switch classes (shows live badge on cursor).</li>
-                      <li><strong>Drag</strong> in Draw mode to draw over crowded boxes.</li>
-                      <li><strong>Single-click</strong> inside a box to select &amp; resize; click outside to return to Draw.</li>
-                      <li><strong>Right-click</strong> any box to Change Label or Delete.</li>
-                    </ul>
-                  </div>
-                  <div className="bg-white border border-[#C4CCC7] p-3.5 space-y-1.5">
-                    <div className="font-mono-label font-bold text-[#0B7A6F]">TRACKING &amp; NAVIGATION</div>
-                    <ul className="space-y-1 text-[#13241F] list-disc pl-4">
-                      <li>Draw all objects on Frame 1, choose track length (<code>3, 5, 7, 10, XX</code>), and press <strong>T</strong>.</li>
-                      <li>Tracker stays on your current frame so you can step forward with <strong>D / →</strong> and verify each box.</li>
-                      <li>Pressing <strong>D / →</strong> on the last frame automatically moves to the next video.</li>
-                      <li>Toggle <strong>Auto-Save</strong> ON/OFF anytime in the top toolbar.</li>
-                    </ul>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSection('practice')}
-                  className="bg-[#13241F] hover:bg-[#0B7A6F] text-white font-mono-label text-xs px-4 py-2 cursor-pointer transition-colors"
-                >
-                  Open Interactive Canvas Sandbox →
-                </button>
-              </div>
-            )}
-
-            {activeStep === 4 && (
-              <div className="space-y-4">
-                <h3 className="text-base font-bold text-[#13241F]">
-                  Step 4: Sequential Split &amp; Export Rename (Try Simulator)
-                </h3>
-                <p className="text-xs text-[#76817B]">
-                  Splits each video sequentially in frame order (non-random), shows class distribution &amp; spatial
-                  heatmap, and exports <code>train/</code>, <code>val/</code>, <code>test/</code> with{' '}
-                  <code>data.yaml</code>.
-                </p>
-
-                <div className="bg-white border border-[#C4CCC7] p-4 space-y-3 text-xs">
-                  <div className="grid grid-cols-3 gap-3 font-mono-label">
-                    <div>
-                      <label className="text-[#76817B] block mb-1">TRAIN %</label>
-                      <input
-                        type="number"
-                        value={simTrain}
-                        onChange={(e) => setSimTrain(Math.max(0, Number(e.target.value)))}
-                        className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[#76817B] block mb-1">VAL %</label>
-                      <input
-                        type="number"
-                        value={simVal}
-                        onChange={(e) => setSimVal(Math.max(0, Number(e.target.value)))}
-                        className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[#76817B] block mb-1">TEST %</label>
-                      <input
-                        type="number"
-                        value={simTest}
-                        onChange={(e) => setSimTest(Math.max(0, Number(e.target.value)))}
-                        className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Visual Sequential Split Bar */}
-                  <div className="h-5 w-full flex overflow-hidden border border-[#13241F] font-mono-label text-[10px] text-white">
-                    <div
-                      style={{ width: `${simTrainPct}%` }}
-                      className="bg-[#0B7A6F] flex items-center justify-center"
-                    >
-                      Train {simTrainPct}%
-                    </div>
-                    <div
-                      style={{ width: `${simValPct}%` }}
-                      className="bg-[#E8553D] flex items-center justify-center"
-                    >
-                      Val {simValPct}%
-                    </div>
-                    <div
-                      style={{ width: `${simTestPct}%` }}
-                      className="bg-[#13241F] flex items-center justify-center"
-                    >
-                      Test {simTestPct}%
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#E2E7E4] flex flex-wrap items-center gap-2 font-mono-label">
-                    <span className="text-[#76817B]">Rename Mode:</span>
-                    <select
-                      value={simRenameMode}
-                      onChange={(e) => setSimRenameMode(e.target.value as any)}
-                      className="border border-[#C4CCC7] px-2 py-1 bg-[#EEF2EF]"
-                    >
-                      <option value="none">Original</option>
-                      <option value="prefix">Prefix</option>
-                      <option value="suffix">Suffix</option>
-                      <option value="full">Full Sequential</option>
-                    </select>
-                    {simRenameMode !== 'none' && (
-                      <input
-                        type="text"
-                        value={simRenameVal}
-                        onChange={(e) => setSimRenameVal(e.target.value)}
-                        className="border border-[#C4CCC7] px-2 py-1 w-32"
-                      />
-                    )}
-                    <span className="ml-auto text-[#0B7A6F]">
-                      →{' '}
-                      {simRenameMode === 'prefix'
-                        ? `${simRenameVal || 'pre_'}frame_000000.jpg`
-                        : simRenameMode === 'suffix'
-                        ? `frame_000000${simRenameVal || '_suf'}.jpg`
-                        : simRenameMode === 'full'
-                        ? `${simRenameVal || 'frame'}_000001.jpg`
-                        : '1_frame_000000.jpg'}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#C4CCC7] pb-3">
+                  <div className="flex items-center gap-2">
+                    {selectedBranch === 'project' && <FolderKanban className="w-4 h-4 text-[#13241F]" />}
+                    {selectedBranch === 'media' && <Film className="w-4 h-4 text-[#0B7A6F]" />}
+                    {selectedBranch === 'annotate' && <PenTool className="w-4 h-4 text-[#E8553D]" />}
+                    {selectedBranch === 'export' && <BarChart3 className="w-4 h-4 text-[#0B7A6F]" />}
+                    <h3 className="text-sm font-bold text-[#13241F]">{activeBranchObj.title}</h3>
+                    <span className="font-mono-label text-[11px] text-[#76817B]">
+                      — {activeBranchObj.subtitle}
                     </span>
                   </div>
+                  {selectedBranch === 'annotate' && (
+                    <button
+                      onClick={() => setSection('practice')}
+                      className="bg-[#13241F] hover:bg-[#0B7A6F] text-white font-mono-label text-xs px-3 py-1.5 cursor-pointer"
+                    >
+                      Open Canvas Sandbox →
+                    </button>
+                  )}
                 </div>
+
+                {/* Leaf Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {activeBranchObj.children.map((ch) => (
+                    <div
+                      key={ch.label}
+                      onClick={() => setSelectedLeaf(ch.label)}
+                      className={`p-3 border cursor-pointer transition-colors ${
+                        selectedLeaf === ch.label
+                          ? 'bg-[#13241F] text-white border-[#E8553D]'
+                          : 'bg-white text-[#13241F] border-[#C4CCC7] hover:border-[#13241F]'
+                      }`}
+                    >
+                      <div className="font-mono-label text-xs font-bold">{ch.label}</div>
+                      <p
+                        className={`text-xs mt-1 ${
+                          selectedLeaf === ch.label ? 'text-[#D8DFDB]' : 'text-[#76817B]'
+                        }`}
+                      >
+                        {ch.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Embedded Interactive Simulator for Media */}
+                {selectedBranch === 'media' && (
+                  <div className="bg-white border border-[#C4CCC7] p-4 space-y-3">
+                    <div className="flex items-center justify-between font-mono-label text-xs">
+                      <span className="font-bold text-[#13241F]">
+                        TRY QUICK-CLIP SIMULATOR (60s VIDEO)
+                      </span>
+                      <span className="text-[#76817B]">Playhead: {simTime}s</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={59}
+                      value={simTime}
+                      onChange={(e) => setSimTime(Number(e.target.value))}
+                      className="w-full accent-[#E8553D]"
+                    />
+                    <div className="relative h-4 bg-[#D8DFDB] border border-[#C4CCC7]">
+                      {simClips.map((c, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            left: `${(c.start / 60) * 100}%`,
+                            width: `${((c.end - c.start) / 60) * 100}%`,
+                          }}
+                          className="absolute top-0 bottom-0 bg-[#0B7A6F]/70 border-x border-[#0B7A6F]"
+                        />
+                      ))}
+                      <div
+                        style={{ left: `${(simTime / 60) * 100}%` }}
+                        className="absolute top-0 bottom-0 w-0.5 bg-[#E8553D]"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 font-mono-label text-xs">
+                        {[3, 5, 10].map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => setSimClipDur(d)}
+                            className={`px-2 py-1 border cursor-pointer ${
+                              simClipDur === d
+                                ? 'bg-[#13241F] text-white border-[#13241F]'
+                                : 'bg-[#EEF2EF] border-[#C4CCC7] text-[#13241F]'
+                            }`}
+                          >
+                            {d}s
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            setSimClips((prev) => [
+                              ...prev,
+                              { start: simTime, end: Math.min(60, simTime + simClipDur) },
+                            ])
+                          }
+                          className="bg-[#E8553D] hover:bg-[#C83E28] text-white font-mono-label text-xs px-3 py-1.5 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Scissors className="w-3.5 h-3.5" /> Clip {simClipDur}s ({simTime}s →{' '}
+                          {Math.min(60, simTime + simClipDur)}s)
+                        </button>
+                        <button
+                          onClick={() => setSimClips([])}
+                          className="border border-[#76817B] text-[#13241F] font-mono-label text-xs px-2.5 py-1.5 cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                    <div className="font-mono-label text-[11px] text-[#0B7A6F]">
+                      Queued {simClips.length} clip(s) · Est.{' '}
+                      {simClips.reduce((acc, c) => acc + (c.end - c.start) * 25, 0)} frames @ 25 FPS
+                    </div>
+                  </div>
+                )}
+
+                {/* Embedded Interactive Simulator for Split & Export */}
+                {selectedBranch === 'export' && (
+                  <div className="bg-white border border-[#C4CCC7] p-4 space-y-3 text-xs">
+                    <div className="grid grid-cols-3 gap-3 font-mono-label">
+                      <div>
+                        <label className="text-[#76817B] block mb-1">TRAIN %</label>
+                        <input
+                          type="number"
+                          value={simTrain}
+                          onChange={(e) => setSimTrain(Math.max(0, Number(e.target.value)))}
+                          className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[#76817B] block mb-1">VAL %</label>
+                        <input
+                          type="number"
+                          value={simVal}
+                          onChange={(e) => setSimVal(Math.max(0, Number(e.target.value)))}
+                          className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[#76817B] block mb-1">TEST %</label>
+                        <input
+                          type="number"
+                          value={simTest}
+                          onChange={(e) => setSimTest(Math.max(0, Number(e.target.value)))}
+                          className="w-full border border-[#C4CCC7] px-2 py-1 text-[#13241F]"
+                        />
+                      </div>
+                    </div>
+                    <div className="h-5 w-full flex overflow-hidden border border-[#13241F] font-mono-label text-[10px] text-white">
+                      <div style={{ width: `${simTrainPct}%` }} className="bg-[#0B7A6F] flex items-center justify-center">
+                        Train {simTrainPct}%
+                      </div>
+                      <div style={{ width: `${simValPct}%` }} className="bg-[#E8553D] flex items-center justify-center">
+                        Val {simValPct}%
+                      </div>
+                      <div style={{ width: `${simTestPct}%` }} className="bg-[#13241F] flex items-center justify-center">
+                        Test {simTestPct}%
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-[#E2E7E4] flex flex-wrap items-center gap-2 font-mono-label">
+                      <span className="text-[#76817B]">Rename:</span>
+                      <select
+                        value={simRenameMode}
+                        onChange={(e) => setSimRenameMode(e.target.value as any)}
+                        className="border border-[#C4CCC7] px-2 py-1 bg-[#EEF2EF]"
+                      >
+                        <option value="none">Original</option>
+                        <option value="prefix">Prefix</option>
+                        <option value="suffix">Suffix</option>
+                        <option value="full">Full Sequential</option>
+                      </select>
+                      {simRenameMode !== 'none' && (
+                        <input
+                          type="text"
+                          value={simRenameVal}
+                          onChange={(e) => setSimRenameVal(e.target.value)}
+                          className="border border-[#C4CCC7] px-2 py-1 w-32"
+                        />
+                      )}
+                      <span className="ml-auto text-[#0B7A6F]">
+                        →{' '}
+                        {simRenameMode === 'prefix'
+                          ? `${simRenameVal || 'pre_'}frame_000000.jpg`
+                          : simRenameMode === 'suffix'
+                          ? `frame_000000${simRenameVal || '_suf'}.jpg`
+                          : simRenameMode === 'full'
+                          ? `${simRenameVal || 'frame'}_000001.jpg`
+                          : '1_frame_000000.jpg'}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -474,7 +631,6 @@ export const HelpView: React.FC = () => {
               </button>
             </div>
 
-            {/* Interactive Practice Area */}
             <div
               onMouseMove={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
@@ -537,7 +693,6 @@ export const HelpView: React.FC = () => {
                 );
               })}
 
-              {/* Cursor Class Badge */}
               {demoMode === 'draw' && demoCursor && (
                 <div
                   style={{ left: demoCursor.x + 14, top: demoCursor.y + 14 }}
@@ -565,7 +720,6 @@ export const HelpView: React.FC = () => {
             )}
           </div>
 
-          {/* Right Legend */}
           <div className="lg:col-span-4 bg-[#EEF2EF] border border-[#C4CCC7] rounded-xl p-4 space-y-4 text-xs">
             <h4 className="font-mono-label font-bold text-[#13241F] uppercase">
               Active Class (W / S)
