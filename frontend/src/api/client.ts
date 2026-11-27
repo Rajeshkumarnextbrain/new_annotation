@@ -206,6 +206,7 @@ export const api = {
       stratified: boolean;
       video_aware: boolean;
       per_video_sequential: boolean;
+      include_unannotated?: boolean;
       seed?: number;
     }
   ) =>
@@ -236,10 +237,16 @@ export const api = {
         body: JSON.stringify(payload),
       }
     ),
-  exportYoloUrl: (projectId: number, renameMode = 'none', renameValue = '') => {
+  exportYoloUrl: (
+    projectId: number,
+    renameMode = 'none',
+    renameValue = '',
+    includeUnannotated = false
+  ) => {
     const params = new URLSearchParams({
       rename_mode: renameMode,
       rename_value: renameValue,
+      include_unannotated: String(includeUnannotated),
     });
     return `${BASE}/projects/${projectId}/export/yolo?${params.toString()}`;
   },

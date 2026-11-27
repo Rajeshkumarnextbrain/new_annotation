@@ -27,6 +27,7 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
   const [stratified, setStratified] = useState(true);
   const [videoAware, setVideoAware] = useState(true);
   const [perVideoSequential, setPerVideoSequential] = useState(true);
+  const [includeUnannotated, setIncludeUnannotated] = useState(false);
   const [splitMsg, setSplitMsg] = useState('');
 
   const [renameMode, setRenameMode] = useState<'none' | 'prefix' | 'suffix' | 'full'>('none');
@@ -62,6 +63,7 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
         stratified,
         video_aware: videoAware,
         per_video_sequential: perVideoSequential,
+        include_unannotated: includeUnannotated,
       });
       setSplitMsg(
         `Split ${res.total_frames} frames → Train: ${res.splits.train || 0}, Val: ${
@@ -126,7 +128,7 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
             Refresh
           </button>
           <a
-            href={api.exportYoloUrl(projectId, renameMode, renameValue)}
+            href={api.exportYoloUrl(projectId, renameMode, renameValue, includeUnannotated)}
             className="bg-[#E8553D] hover:bg-[#C83E28] text-white font-mono-label px-4 py-1.5 text-xs flex items-center gap-1.5 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -250,6 +252,15 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
                 className="accent-[#0B7A6F]"
               />
               Per-Video Sequential (Train → Val → Test, non-random)
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeUnannotated}
+                onChange={(e) => setIncludeUnannotated(e.target.checked)}
+                className="accent-[#E8553D]"
+              />
+              Include unannotated frames (0 boxes)
             </label>
             {!perVideoSequential && (
               <>

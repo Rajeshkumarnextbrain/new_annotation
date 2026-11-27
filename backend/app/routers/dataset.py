@@ -34,8 +34,19 @@ def split_dataset(project_id: int, payload: SplitRequest):
         for a in anns:
             anns_by_frame[a["frame_id"]].append(a)
 
+        target_frames = (
+            frames
+            if payload.include_unannotated
+            else [f for f in frames if len(anns_by_frame.get(f["id"], [])) > 0]
+        )
+        if not target_frames:
+            raise HTTPException(400, "No annotated frames found to split")
+
+        # Reset all project frames to unassigned first
+        conn.execute("UPDATE frames SET split = 'unassigned' WHERE project_id = ?", (project_id,))
+
         assignments = compute_splits(
-            frames=frames,
+            frames=target_frames,
             annotations_by_frame=anns_by_frame,
             train_ratio=payload.train_ratio,
             val_ratio=payload.val_ratio,
@@ -84,6 +95,7 @@ def download_yolo_export(
     project_id: int,
     rename_mode: str = "none",
     rename_value: str = "",
+    include_unannotated: bool = False,
 ):
     with db_session() as conn:
         proj = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
@@ -111,8 +123,14 @@ def download_yolo_export(
         for a in anns:
             anns_by_frame[a["frame_id"]].append(a)
 
+        export_frames = (
+            frames
+            if include_unannotated
+            else [f for f in frames if len(anns_by_frame.get(f["id"], [])) > 0]
+        )
+
         zip_bytes = export_yolo_zip(
-            proj["name"], classes, frames, anns_by_frame, rename_mode=rename_mode, rename_value=rename_value
+            proj["name"], classes, export_frames, anns_by_frame, rename_mode=rename_mode, rename_value=rename_value
         )
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in proj["name"])
         return Response(

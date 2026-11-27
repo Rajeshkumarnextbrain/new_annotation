@@ -112,6 +112,7 @@ class SplitRequest(BaseModel):
     stratified: bool = True
     video_aware: bool = True
     per_video_sequential: bool = True
+    include_unannotated: bool = False
     seed: int = 42
 
 
