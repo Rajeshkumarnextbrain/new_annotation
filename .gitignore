@@ -1,0 +1,9 @@
+# Runtime data & environments
+data/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+frontend/node_modules/
+frontend/dist/
+*.db
+*.sqlite

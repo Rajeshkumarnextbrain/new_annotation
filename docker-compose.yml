@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: yolo-studio-backend
+    ports:
+      - "8784:8784"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yolo-studio-frontend
+    ports:
+      - "3784:3784"
+    depends_on:
+      - backend
+    restart: unless-stopped
