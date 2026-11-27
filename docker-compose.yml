@@ -3,6 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: host
     container_name: yolo-studio-backend
     ports:
       - "8784:8784"
@@ -14,6 +15,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      network: host
     container_name: yolo-studio-frontend
     ports:
       - "3784:3784"
