@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .database import db_session, init_db
 from .routers import annotations, dataset, media, projects
-from .services.video_service import ensure_browser_preview
+from .services.video_service import ensure_browser_preview, prefetch_videos
 
 app = FastAPI(title="YOLO Data Annotation Tool", version="1.0.0")
 
@@ -49,13 +49,19 @@ def serve_frame_image(frame_id: int):
 @app.get("/api/media/video/{video_id}/status")
 def get_video_playback_status(video_id: int):
     with db_session() as conn:
-        row = conn.execute("SELECT file_path FROM videos WHERE id = ?", (video_id,)).fetchone()
+        row = conn.execute("SELECT project_id, file_path FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Video not found")
         p = Path(row["file_path"])
         if not p.exists():
             raise HTTPException(404, "Video file missing on disk")
+        upcoming = conn.execute(
+            "SELECT id, file_path FROM videos WHERE project_id = ? AND processed = 0 AND id != ? ORDER BY id DESC LIMIT 3",
+            (row["project_id"], video_id),
+        ).fetchall()
     res = ensure_browser_preview(video_id, str(p))
+    if res["status"] == "ready" and upcoming:
+        prefetch_videos([(r["id"], r["file_path"]) for r in upcoming])
     return {"status": res["status"], "error": res.get("error")}
 
 

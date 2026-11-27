@@ -254,7 +254,7 @@ def _transcode_preview_worker(video_id: int, file_path: str, preview_path: Path)
             "-map",
             "0:a:0?",
             "-vf",
-            "scale=min(1280\\,iw):-2",
+            "scale=min(960\\,iw):-2",
             "-c:v",
             "libx264",
             "-preset",
@@ -313,3 +313,37 @@ def ensure_browser_preview(video_id: int, file_path: str) -> Dict[str, Any]:
     )
     t.start()
     return {"status": "transcoding"}
+
+
+_prefetch_lock = threading.Lock()
+_prefetch_active = False
+
+
+def prefetch_videos(video_items: List[Tuple[int, str]]) -> None:
+    """Background-transcode upcoming videos one at a time so the next video plays immediately."""
+    global _prefetch_active
+    with _prefetch_lock:
+        if _prefetch_active:
+            return
+        _prefetch_active = True
+
+    def _run():
+        global _prefetch_active
+        try:
+            for vid, fpath in video_items:
+                if not Path(fpath).exists() or is_browser_playable(fpath):
+                    continue
+                preview_path = get_preview_path(vid)
+                with _preview_lock:
+                    job = _preview_jobs.get(vid)
+                    if (job and job.get("status") in ("transcoding", "ready")) or (
+                        preview_path.exists() and preview_path.stat().st_size > 0
+                    ):
+                        continue
+                    _preview_jobs[vid] = {"status": "transcoding"}
+                _transcode_preview_worker(vid, fpath, preview_path)
+        finally:
+            with _prefetch_lock:
+                _prefetch_active = False
+
+    threading.Thread(target=_run, daemon=True).start()
