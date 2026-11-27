@@ -1,13 +1,22 @@
 import json
 import subprocess
+import threading
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 import cv2
 import numpy as np
 
+from ..database import DATA_DIR
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+BROWSER_CODECS = {"h264", "vp8", "vp9", "av1"}
+BROWSER_PIX_FMTS = {"yuv420p", "yuvj420p", ""}
+BROWSER_CONTAINERS = {".mp4", ".m4v", ".webm"}
+
+_preview_lock = threading.Lock()
+_preview_jobs: Dict[int, Dict[str, Any]] = {}
+_codec_cache: Dict[str, bool] = {}
 
 
 def probe_video(file_path: str) -> Dict[str, Any]:
@@ -178,3 +187,129 @@ def extract_clip_frames(
         pass
 
     return saved
+
+
+def get_preview_path(video_id: int) -> Path:
+    preview_dir = DATA_DIR / "previews"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    return preview_dir / f"video_{video_id}.mp4"
+
+
+def delete_preview(video_id: int) -> None:
+    with _preview_lock:
+        _preview_jobs.pop(video_id, None)
+    p = get_preview_path(video_id)
+    p.unlink(missing_ok=True)
+    p.with_suffix(".tmp.mp4").unlink(missing_ok=True)
+
+
+def is_browser_playable(file_path: str) -> bool:
+    """Return True if the video container/codec/pixel-format plays natively in HTML5 <video>."""
+    if file_path in _codec_cache:
+        return _codec_cache[file_path]
+
+    p = Path(file_path)
+    if p.suffix.lower() not in BROWSER_CONTAINERS:
+        _codec_cache[file_path] = False
+        return False
+
+    playable = False
+    try:
+        cmd = [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,pix_fmt",
+            file_path,
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if res.returncode == 0:
+            streams = json.loads(res.stdout).get("streams", [])
+            if streams:
+                codec = (streams[0].get("codec_name") or "").lower()
+                pix_fmt = (streams[0].get("pix_fmt") or "").lower()
+                playable = codec in BROWSER_CODECS and pix_fmt in BROWSER_PIX_FMTS
+    except Exception:
+        playable = False
+
+    _codec_cache[file_path] = playable
+    return playable
+
+
+def _transcode_preview_worker(video_id: int, file_path: str, preview_path: Path) -> None:
+    tmp_path = preview_path.with_suffix(".tmp.mp4")
+    try:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            file_path,
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0?",
+            "-vf",
+            "scale=min(1280\\,iw):-2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "26",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            str(tmp_path),
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0 or not tmp_path.exists() or tmp_path.stat().st_size == 0:
+            err = (res.stderr or "FFmpeg transcode failed")[-300:]
+            tmp_path.unlink(missing_ok=True)
+            with _preview_lock:
+                _preview_jobs[video_id] = {"status": "error", "error": err}
+            return
+
+        tmp_path.replace(preview_path)
+        with _preview_lock:
+            _preview_jobs[video_id] = {"status": "ready", "path": str(preview_path)}
+    except Exception as exc:
+        tmp_path.unlink(missing_ok=True)
+        with _preview_lock:
+            _preview_jobs[video_id] = {"status": "error", "error": str(exc)[:300]}
+
+
+def ensure_browser_preview(video_id: int, file_path: str) -> Dict[str, Any]:
+    """
+    Ensure a browser-playable MP4 exists for video_id.
+    Returns {'status': 'ready', 'path': ...} or {'status': 'transcoding'} or {'status': 'error', 'error': ...}.
+    """
+    if is_browser_playable(file_path):
+        return {"status": "ready", "path": file_path}
+
+    preview_path = get_preview_path(video_id)
+    with _preview_lock:
+        job = _preview_jobs.get(video_id)
+        if job and job.get("status") == "transcoding":
+            return {"status": "transcoding"}
+        if preview_path.exists() and preview_path.stat().st_size > 0:
+            _preview_jobs[video_id] = {"status": "ready", "path": str(preview_path)}
+            return {"status": "ready", "path": str(preview_path)}
+        _preview_jobs[video_id] = {"status": "transcoding"}
+
+    t = threading.Thread(
+        target=_transcode_preview_worker,
+        args=(video_id, file_path, preview_path),
+        daemon=True,
+    )
+    t.start()
+    return {"status": "transcoding"}

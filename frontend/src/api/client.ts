@@ -225,4 +225,8 @@ export const api = {
   },
   frameImageUrl: (frameId: number) => `${BASE}/media/frame/${frameId}`,
   videoStreamUrl: (videoId: number) => `${BASE}/media/video/${videoId}`,
+  getVideoStatus: (videoId: number) =>
+    request<{ status: 'ready' | 'transcoding' | 'error'; error?: string }>(
+      `/media/video/${videoId}/status`
+    ),
 };

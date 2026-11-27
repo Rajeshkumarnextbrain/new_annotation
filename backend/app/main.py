@@ -1,10 +1,11 @@
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from .database import db_session, init_db
 from .routers import annotations, dataset, media, projects
+from .services.video_service import ensure_browser_preview
 
 app = FastAPI(title="YOLO Data Annotation Tool", version="1.0.0")
 
@@ -45,6 +46,19 @@ def serve_frame_image(frame_id: int):
         return FileResponse(str(p))
 
 
+@app.get("/api/media/video/{video_id}/status")
+def get_video_playback_status(video_id: int):
+    with db_session() as conn:
+        row = conn.execute("SELECT file_path FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Video not found")
+        p = Path(row["file_path"])
+        if not p.exists():
+            raise HTTPException(404, "Video file missing on disk")
+    res = ensure_browser_preview(video_id, str(p))
+    return {"status": res["status"], "error": res.get("error")}
+
+
 @app.get("/api/media/video/{video_id}")
 def serve_video_file(video_id: int):
     with db_session() as conn:
@@ -54,4 +68,9 @@ def serve_video_file(video_id: int):
         p = Path(row["file_path"])
         if not p.exists():
             raise HTTPException(404, "Video file missing on disk")
-        return FileResponse(str(p), media_type="video/mp4")
+    res = ensure_browser_preview(video_id, str(p))
+    if res["status"] == "ready":
+        return FileResponse(res["path"], media_type="video/mp4")
+    if res["status"] == "error":
+        raise HTTPException(500, res.get("error") or "Failed to prepare video preview")
+    return JSONResponse({"status": "transcoding"}, status_code=202)

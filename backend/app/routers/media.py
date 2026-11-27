@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from ..database import DATA_DIR, db_session
 from ..models import ExtractClipsRequest, FolderImportRequest, VideoLinkRequest
-from ..services.video_service import IMAGE_EXTS, VIDEO_EXTS, extract_clip_frames, probe_video
+from ..services.video_service import IMAGE_EXTS, VIDEO_EXTS, delete_preview, extract_clip_frames, probe_video
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["media"])
 
@@ -221,6 +221,7 @@ def delete_video(project_id: int, video_id: int):
     proj_dir = _project_media_dir(project_id).resolve()
     if vid_path and vid_path.exists() and proj_dir in vid_path.parents:
         vid_path.unlink(missing_ok=True)
+    delete_preview(video_id)
     return {"ok": True}
 
 

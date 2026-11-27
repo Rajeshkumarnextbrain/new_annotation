@@ -9,6 +9,8 @@ services:
       - "8784:8784"
     volumes:
       - ./data:/app/data
+    environment:
+      - DATA_DIR=/app/data
     restart: unless-stopped
 
   frontend:

@@ -58,6 +58,8 @@ export const MediaManager: React.FC<Props> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [videoStatus, setVideoStatus] = useState<'checking' | 'transcoding' | 'ready' | 'error'>('checking');
+  const [videoError, setVideoError] = useState('');
   const [autoClipEnabled, setAutoClipEnabled] = useState(true);
   const [autoClipSeconds, setAutoClipSeconds] = useState(5);
   const [manualStart, setManualStart] = useState(0);
@@ -104,6 +106,38 @@ export const MediaManager: React.FC<Props> = ({
       setSelectedVideo(updated);
     }
   }, [videos, firstUnprocessedIdx]);
+
+  useEffect(() => {
+    if (!selectedVideo) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    setCurrentTime(0);
+    setVideoStatus('checking');
+    setVideoError('');
+
+    const poll = async () => {
+      try {
+        const res = await api.getVideoStatus(selectedVideo.id);
+        if (cancelled) return;
+        setVideoStatus(res.status);
+        if (res.status === 'error') {
+          setVideoError(res.error || 'Unable to prepare video preview');
+        } else if (res.status === 'transcoding') {
+          timer = setTimeout(poll, 1000);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        setVideoStatus('error');
+        setVideoError(err?.message || 'Failed to check video status');
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [selectedVideo?.id]);
 
   useEffect(() => {
     if (!job || job.status === 'completed' || job.status === 'failed') return;
@@ -575,13 +609,35 @@ export const MediaManager: React.FC<Props> = ({
           ) : (
             <>
               <div className="flex-1 bg-[#13241F] flex items-center justify-center min-h-0 p-2 overflow-hidden">
-                <video
-                  ref={videoRef}
-                  src={api.videoStreamUrl(selectedVideo.id)}
-                  controls
-                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                  className="max-h-full max-w-full w-full h-full object-contain"
-                />
+                {videoStatus === 'ready' ? (
+                  <video
+                    key={selectedVideo.id}
+                    ref={videoRef}
+                    src={api.videoStreamUrl(selectedVideo.id)}
+                    controls
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    className="max-h-full max-w-full w-full h-full object-contain"
+                  />
+                ) : videoStatus === 'error' ? (
+                  <div className="text-center px-6 text-xs text-[#EEF2EF]">
+                    <p className="font-semibold text-[#E8553D]">Video preview unavailable</p>
+                    <p className="mt-1 text-[#9AA59F] max-w-md">{videoError}</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center px-6 text-xs text-[#EEF2EF]">
+                    <Loader2 className="w-7 h-7 text-[#E8553D] animate-spin mb-2.5" />
+                    <p className="font-semibold">
+                      {videoStatus === 'transcoding'
+                        ? 'Preparing browser-compatible preview (H.264)...'
+                        : 'Checking video compatibility...'}
+                    </p>
+                    <p className="mt-1 text-[#9AA59F]">
+                      {videoStatus === 'transcoding'
+                        ? 'This runs once per non-H.264 video. Clip extraction still uses the original full-resolution file.'
+                        : 'Please wait a moment.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Clip Timeline */}
