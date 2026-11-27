@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, Check, ChevronDown, Film, FolderKanban, Lock, PenTool } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, Film, FolderKanban, HelpCircle, Lock, PenTool } from 'lucide-react';
 import type { ClassItem, MediaSequence, Project, VideoItem } from './types';
 import { api } from './api/client';
 import { ProjectList } from './components/ProjectList';
 import { MediaManager } from './components/MediaManager';
 import { AnnotationWorkspace } from './components/AnnotationWorkspace';
 import { AnalyticsSplitView } from './components/AnalyticsSplitView';
+import { HelpView } from './components/HelpView';
 
-type Tab = 'projects' | 'media' | 'annotate' | 'analytics';
+type Tab = 'projects' | 'media' | 'annotate' | 'analytics' | 'help';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('projects');
@@ -71,6 +72,7 @@ export default function App() {
 
   // Auto-redirect if current tab becomes locked when switching projects
   useEffect(() => {
+    if (tab === 'help') return;
     if (!hasProject && tab !== 'projects') {
       setTab('projects');
     } else if (hasProject && (!hasFrames || !allVideosProcessed) && (tab === 'annotate' || tab === 'analytics')) {
@@ -229,15 +231,29 @@ export default function App() {
           })}
         </nav>
 
-        {selectedProject && (
-          <div className="hidden lg:flex items-center gap-3 font-mono-label text-[11px] text-[#76817B] tabular-nums">
-            <span>{selectedProject.frame_count}F</span>
-            <span>·</span>
-            <span>{selectedProject.annotation_count}B</span>
-            <span>·</span>
-            <span>{selectedProject.class_count}C</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {selectedProject && (
+            <div className="hidden lg:flex items-center gap-3 font-mono-label text-[11px] text-[#76817B] tabular-nums">
+              <span>{selectedProject.frame_count}F</span>
+              <span>·</span>
+              <span>{selectedProject.annotation_count}B</span>
+              <span>·</span>
+              <span>{selectedProject.class_count}C</span>
+            </div>
+          )}
+          <button
+            onClick={() => setTab('help')}
+            className={`px-3 py-1.5 rounded-full font-mono-label text-[11px] flex items-center gap-1.5 border transition-colors cursor-pointer ${
+              tab === 'help'
+                ? 'bg-[#13241F] border-[#13241F] text-white'
+                : 'bg-[#E2E7E4] border-[#C4CCC7] text-[#13241F] hover:bg-[#D8DFDB]'
+            }`}
+            title="Help & Keyboard Shortcuts"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            Help
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -288,6 +304,8 @@ export default function App() {
             }}
           />
         )}
+
+        {tab === 'help' && <HelpView />}
       </main>
     </div>
   );
