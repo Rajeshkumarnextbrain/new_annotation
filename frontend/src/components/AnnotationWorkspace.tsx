@@ -10,6 +10,7 @@ import {
   EyeOff,
   GitBranch,
   Keyboard,
+  Loader2,
   Maximize2,
   MousePointer,
   Pause,
@@ -97,6 +98,7 @@ export const AnnotationWorkspace: React.FC<Props> = ({
   // Playback & Tracking
   const [playing, setPlaying] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [trackingLoading, setTrackingLoading] = useState(false);
   const [autoSave, setAutoSave] = useState(true);
   const [trackLength, setTrackLength] = useState(10);
   const [seqMenuOpen, setSeqMenuOpen] = useState(false);
@@ -376,14 +378,15 @@ export const AnnotationWorkspace: React.FC<Props> = ({
   };
 
   const handleOpenCvTrack = useCallback(async () => {
-    if (!selectedSequenceId || !currentFrame || annotations.length === 0) return;
-    if (dirty || annotations.some((a) => !a.id)) {
-      const saved = await api.saveFrameAnnotations(currentFrame.id, annotations);
-      setAnnotations(saved);
-      setDirty(false);
-    }
-    setStatusMsg(`Tracking ${annotations.length} object(s) (+${trackLength} frames)...`);
+    if (!selectedSequenceId || !currentFrame || annotations.length === 0 || trackingLoading) return;
+    setTrackingLoading(true);
     try {
+      if (dirty || annotations.some((a) => !a.id)) {
+        const saved = await api.saveFrameAnnotations(currentFrame.id, annotations);
+        setAnnotations(saved);
+        setDirty(false);
+      }
+      setStatusMsg(`Tracking ${annotations.length} object(s) (+${trackLength} frames)...`);
       const res = await api.opencvTrackForward(selectedSequenceId, currentFrame.id, null, trackLength);
       setStatusMsg(`Tracked ${res.tracked_objects} object(s) across +${trackLength} frames`);
       const refreshed = await api.getFrameAnnotations(currentFrame.id);
@@ -394,8 +397,10 @@ export const AnnotationWorkspace: React.FC<Props> = ({
       onAnnotationsSaved?.();
     } catch (err: any) {
       setStatusMsg(`Tracker error: ${err.message}`);
+    } finally {
+      setTrackingLoading(false);
     }
-  }, [selectedSequenceId, currentFrame, annotations, dirty, trackLength, onAnnotationsSaved]);
+  }, [selectedSequenceId, currentFrame, annotations, dirty, trackLength, trackingLoading, onAnnotationsSaved]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1012,6 +1017,19 @@ export const AnnotationWorkspace: React.FC<Props> = ({
               Select or import a sequence to start annotating.
             </div>
           ) : (
+            <>
+              {(!imgLoaded || trackingLoading || saving) && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-[#13241F]/90 text-white px-3 py-1.5 font-mono-label text-[11px] flex items-center gap-2 border border-white/20 shadow-lg">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E8553D]" />
+                  <span>
+                    {trackingLoading
+                      ? `Auto-Tracking ${annotations.length} box(es)...`
+                      : saving
+                      ? 'Saving frame...'
+                      : 'Loading frame...'}
+                  </span>
+                </div>
+              )}
             <div
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -1116,6 +1134,7 @@ export const AnnotationWorkspace: React.FC<Props> = ({
                 />
               )}
             </div>
+            </>
           )}
 
           {/* Crosshair Guides */}
@@ -1411,9 +1430,18 @@ export const AnnotationWorkspace: React.FC<Props> = ({
                 </div>
                 <button
                   onClick={handleOpenCvTrack}
-                  className="w-full bg-[#E8553D] hover:bg-[#C83E28] text-white font-mono-label py-1.5 flex items-center justify-center gap-1.5 cursor-pointer"
+                  disabled={trackingLoading}
+                  className="w-full bg-[#E8553D] hover:bg-[#C83E28] disabled:opacity-50 text-white font-mono-label py-1.5 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Wand2 className="w-3.5 h-3.5" /> Auto-Track All ({annotations.length}) +{trackLength}f (T)
+                  {trackingLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Tracking...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-3.5 h-3.5" /> Auto-Track All ({annotations.length}) +{trackLength}f (T)
+                    </>
+                  )}
                 </button>
               </div>
             ) : (

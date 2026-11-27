@@ -12,19 +12,39 @@ import type {
 
 const BASE = '/api';
 
+let activeRequests = 0;
+const listeners = new Set<(count: number) => void>();
+
+function notify() {
+  listeners.forEach((fn) => fn(activeRequests));
+}
+
+export function subscribeLoading(fn: (count: number) => void): () => void {
+  listeners.add(fn);
+  fn(activeRequests);
+  return () => listeners.delete(fn);
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${url}`, options);
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const data = await res.json();
-      msg = data.detail || msg;
-    } catch {
-      // ignore
+  activeRequests += 1;
+  notify();
+  try {
+    const res = await fetch(`${BASE}${url}`, options);
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        msg = data.detail || msg;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
     }
-    throw new Error(msg);
+    return res.json();
+  } finally {
+    activeRequests = Math.max(0, activeRequests - 1);
+    notify();
   }
-  return res.json();
 }
 
 export const api = {

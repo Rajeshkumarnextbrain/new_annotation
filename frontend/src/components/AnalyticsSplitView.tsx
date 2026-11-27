@@ -18,6 +18,8 @@ interface Props {
 export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProject }) => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [splitting, setSplitting] = useState(false);
+  const [importingYolo, setImportingYolo] = useState(false);
 
   const [trainRatio, setTrainRatio] = useState(70);
   const [valRatio, setValRatio] = useState(20);
@@ -51,6 +53,7 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
 
   const handleSplit = async () => {
     setSplitMsg('');
+    setSplitting(true);
     try {
       const res = await api.splitDataset(projectId, {
         train_ratio: trainRatio / 100,
@@ -68,12 +71,15 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
       loadAnalytics();
     } catch (err: any) {
       setSplitMsg(`Error: ${err.message}`);
+    } finally {
+      setSplitting(false);
     }
   };
 
   const handleYoloImport = async (e: React.FormEvent) => {
     e.preventDefault();
     setImportMsg('');
+    setImportingYolo(true);
     try {
       const res = await api.importYoloFolder(projectId, {
         images_dir: imagesDir.trim(),
@@ -90,6 +96,8 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
       onRefreshProject();
     } catch (err: any) {
       setImportMsg(`Error: ${err.message}`);
+    } finally {
+      setImportingYolo(false);
     }
   };
 
@@ -270,9 +278,10 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={handleSplit}
-              className="bg-[#13241F] hover:bg-[#0B7A6F] text-white font-mono-label px-4 py-2 text-xs cursor-pointer transition-colors"
+              disabled={splitting}
+              className="bg-[#13241F] hover:bg-[#0B7A6F] disabled:opacity-50 text-white font-mono-label px-4 py-2 text-xs cursor-pointer transition-colors"
             >
-              Apply Dataset Split
+              {splitting ? 'Splitting...' : 'Apply Dataset Split'}
             </button>
             {analytics && (
               <div className="flex gap-3 font-mono-label text-xs text-[#76817B] tabular-nums">
@@ -317,9 +326,10 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
             />
             <button
               type="submit"
-              className="bg-[#0B7A6F] hover:bg-[#096158] text-white font-mono-label px-4 py-2 text-xs cursor-pointer transition-colors"
+              disabled={importingYolo}
+              className="bg-[#0B7A6F] hover:bg-[#096158] disabled:opacity-50 text-white font-mono-label px-4 py-2 text-xs cursor-pointer transition-colors"
             >
-              Import YOLO Folder
+              {importingYolo ? 'Importing...' : 'Import YOLO Folder'}
             </button>
           </form>
           {importMsg && <p className="font-mono-label text-xs text-[#0B7A6F]">{importMsg}</p>}

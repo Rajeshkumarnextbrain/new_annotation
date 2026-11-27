@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, Check, ChevronDown, Film, FolderKanban, HelpCircle, Lock, PenTool } from 'lucide-react';
 import type { ClassItem, MediaSequence, Project, VideoItem } from './types';
-import { api } from './api/client';
+import { api, subscribeLoading } from './api/client';
 import { ProjectList } from './components/ProjectList';
 import { MediaManager } from './components/MediaManager';
 import { AnnotationWorkspace } from './components/AnnotationWorkspace';
@@ -18,6 +18,11 @@ export default function App() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedSequenceId, setSelectedSequenceId] = useState<number | null>(null);
+  const [loadingCount, setLoadingCount] = useState(0);
+
+  useEffect(() => {
+    return subscribeLoading(setLoadingCount);
+  }, []);
 
   const loadProjects = useCallback(async () => {
     const list = await api.listProjects();
@@ -255,6 +260,13 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Global Top Progress Bar */}
+      {loadingCount > 0 && (
+        <div className="h-0.5 w-full bg-[#E2E7E4] overflow-hidden fixed top-14 left-0 z-40">
+          <div className="h-full w-1/3 bg-[#E8553D] animate-[loading-slide_1s_ease-in-out_infinite]" />
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-0">

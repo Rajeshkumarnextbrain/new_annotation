@@ -352,7 +352,13 @@ export const MediaManager: React.FC<Props> = ({
             {showImport ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             Import Media
           </button>
-          <span className="font-mono-label text-[11px] text-[#76817B] tabular-nums">
+          <span className="font-mono-label text-[11px] text-[#76817B] tabular-nums flex items-center gap-2">
+            {importing && (
+              <span className="inline-flex items-center gap-1 text-[#E8553D] font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                IMPORTING...
+              </span>
+            )}
             {videos.length} VIDEO(S) · {sequences.length} SEQUENCE(S)
           </span>
         </div>
