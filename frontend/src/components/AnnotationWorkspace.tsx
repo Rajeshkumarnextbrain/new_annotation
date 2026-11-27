@@ -1341,9 +1341,25 @@ export const AnnotationWorkspace: React.FC<Props> = ({
 
           {/* Frame Objects */}
           <div className="p-3.5 border-b border-[#C4CCC7] space-y-2 flex-1 min-h-0 overflow-y-auto">
-            <h4 className="font-mono-label text-[11px] font-bold text-[#13241F] uppercase">
-              Frame Objects ({annotations.length})
-            </h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-mono-label text-[11px] font-bold text-[#13241F] uppercase">
+                Frame Objects ({annotations.length})
+              </h4>
+              {annotations.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedIdx(null);
+                    pushHistory([]);
+                    setStatusMsg(`Cleared ${annotations.length} box(es) (Ctrl+Z to undo)`);
+                  }}
+                  className="font-mono-label text-[10px] text-[#E8553D] hover:bg-[#E8553D] hover:text-white border border-[#E8553D]/40 px-2 py-0.5 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Delete all boxes on this frame (Ctrl+Z to undo)"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete All
+                </button>
+              )}
+            </div>
             {annotations.length === 0 ? (
               <p className="text-xs text-[#76817B]">No boxes on this frame.</p>
             ) : (
