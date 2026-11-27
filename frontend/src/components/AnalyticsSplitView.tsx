@@ -32,6 +32,12 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
 
   const [renameMode, setRenameMode] = useState<'none' | 'prefix' | 'suffix' | 'full'>('none');
   const [renameValue, setRenameValue] = useState('');
+  const [hideEmptyClasses, setHideEmptyClasses] = useState(false);
+  const [hoveredClass, setHoveredClass] = useState<{
+    name: string;
+    count: number;
+    color: string;
+  } | null>(null);
 
   const [imagesDir, setImagesDir] = useState('');
   const [labelsDir, setLabelsDir] = useState('');
@@ -350,43 +356,143 @@ export const AnalyticsSplitView: React.FC<Props> = ({ projectId, onRefreshProjec
       {/* Analytics Charts */}
       {analytics && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Class Distribution */}
+          {/* Class Distribution Graph */}
           <div className="bg-[#EEF2EF] border border-[#C4CCC7] rounded-xl p-5 space-y-3">
-            <h3 className="font-bold text-[#13241F] flex items-center gap-2 text-sm">
-              <PieChart className="w-4 h-4 text-[#E8553D]" />
-              Class Distribution
-            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-bold text-[#13241F] flex items-center gap-2 text-sm">
+                <PieChart className="w-4 h-4 text-[#E8553D]" />
+                Class Distribution Graph
+              </h3>
+              <div className="flex items-center gap-3">
+                {hoveredClass && (
+                  <span className="font-mono-label text-[11px] bg-[#13241F] text-white px-2 py-0.5">
+                    {hoveredClass.name}: {hoveredClass.count}
+                  </span>
+                )}
+                <label className="flex items-center gap-1.5 font-mono-label text-[11px] text-[#76817B] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideEmptyClasses}
+                    onChange={(e) => setHideEmptyClasses(e.target.checked)}
+                    className="accent-[#0B7A6F]"
+                  />
+                  Hide 0-count
+                </label>
+              </div>
+            </div>
+
             {analytics.class_distribution.length === 0 ? (
               <p className="text-xs text-[#76817B]">No classes defined yet.</p>
             ) : (
-              <div className="space-y-2.5">
-                {analytics.class_distribution.map((c) => (
-                  <div key={c.class_id} className="space-y-1 text-xs">
-                    <div className="flex justify-between text-[#13241F]">
-                      <span className="flex items-center gap-2 font-medium">
-                        <span
-                          className="w-2.5 h-2.5"
-                          style={{ backgroundColor: c.color }}
-                        />
-                        {c.name}
-                      </span>
-                      <span className="font-mono-label font-bold tabular-nums">{c.count}</span>
-                    </div>
-                    <div className="w-full bg-[#D8DFDB] h-1.5 overflow-hidden">
-                      <div
-                        className="h-full transition-all"
-                        style={{
-                          width: `${(c.count / maxClassCount) * 100}%`,
-                          backgroundColor: c.color,
-                        }}
-                      />
-                    </div>
+              (() => {
+                const items = hideEmptyClasses
+                  ? analytics.class_distribution.filter((c) => c.count > 0)
+                  : analytics.class_distribution;
+                const chartItems = items.length > 0 ? items : analytics.class_distribution;
+                const chartW = Math.max(480, chartItems.length * 42);
+                const chartH = 220;
+                const padL = 40;
+                const padR = 16;
+                const padT = 22;
+                const padB = 64;
+                const plotW = chartW - padL - padR;
+                const plotH = chartH - padT - padB;
+                const barSlot = plotW / Math.max(1, chartItems.length);
+                const barW = Math.min(28, Math.max(12, barSlot * 0.62));
+                const ticks = [0, 0.25, 0.5, 0.75, 1];
+
+                return (
+                  <div className="bg-white border border-[#C4CCC7] p-2 overflow-x-auto">
+                    <svg
+                      viewBox={`0 0 ${chartW} ${chartH}`}
+                      className="w-full min-w-[440px] h-56 block"
+                    >
+                      {/* Horizontal Gridlines & Y-Axis Ticks */}
+                      {ticks.map((t) => {
+                        const y = padT + plotH * (1 - t);
+                        const val = Math.round(maxClassCount * t);
+                        return (
+                          <g key={t}>
+                            <line
+                              x1={padL}
+                              y1={y}
+                              x2={chartW - padR}
+                              y2={y}
+                              stroke="#E2E7E4"
+                              strokeWidth={1}
+                            />
+                            <text
+                              x={padL - 6}
+                              y={y + 3}
+                              textAnchor="end"
+                              fill="#76817B"
+                              fontSize={9}
+                              fontFamily="Space Mono, monospace"
+                            >
+                              {val}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Bars */}
+                      {chartItems.map((c, idx) => {
+                        const h = maxClassCount > 0 ? (c.count / maxClassCount) * plotH : 0;
+                        const x = padL + idx * barSlot + (barSlot - barW) / 2;
+                        const y = padT + plotH - h;
+                        const labelX = x + barW / 2;
+                        const labelY = padT + plotH + 12;
+                        return (
+                          <g
+                            key={c.class_id}
+                            onMouseEnter={() =>
+                              setHoveredClass({ name: c.name, count: c.count, color: c.color })
+                            }
+                            onMouseLeave={() => setHoveredClass(null)}
+                            className="cursor-pointer"
+                          >
+                            <rect
+                              x={x}
+                              y={Math.min(y, padT + plotH - 2)}
+                              width={barW}
+                              height={Math.max(2, h)}
+                              fill={c.color}
+                              opacity={c.count === 0 ? 0.25 : 0.92}
+                            />
+                            {c.count > 0 && (
+                              <text
+                                x={labelX}
+                                y={y - 5}
+                                textAnchor="middle"
+                                fill="#13241F"
+                                fontSize={9}
+                                fontWeight="bold"
+                                fontFamily="Space Mono, monospace"
+                              >
+                                {c.count}
+                              </text>
+                            )}
+                            <text
+                              x={labelX}
+                              y={labelY}
+                              textAnchor="end"
+                              transform={`rotate(-35 ${labelX} ${labelY})`}
+                              fill="#13241F"
+                              fontSize={9}
+                              fontFamily="Space Mono, monospace"
+                            >
+                              {c.name.length > 12 ? `${c.name.slice(0, 11)}…` : c.name}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
                   </div>
-                ))}
-              </div>
+                );
+              })()
             )}
 
-            <div className="pt-3 border-t border-[#C4CCC7] grid grid-cols-3 gap-2 font-mono-label text-xs text-[#76817B]">
+            <div className="pt-2 border-t border-[#C4CCC7] grid grid-cols-3 gap-2 font-mono-label text-xs text-[#76817B]">
               <div>SMALL: <strong className="text-[#13241F]">{analytics.size_buckets.small}</strong></div>
               <div>MEDIUM: <strong className="text-[#13241F]">{analytics.size_buckets.medium}</strong></div>
               <div>LARGE: <strong className="text-[#13241F]">{analytics.size_buckets.large}</strong></div>
