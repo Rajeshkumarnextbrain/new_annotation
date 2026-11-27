@@ -1659,10 +1659,27 @@ export const AnnotationWorkspace: React.FC<Props> = ({
       {/* Right-Click Context Menu for BBox */}
       {contextMenu && annotations[contextMenu.boxIdx] && (
         <div
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{
+            left: Math.max(8, Math.min(contextMenu.x, window.innerWidth - 208)),
+            top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 250)),
+          }}
           onMouseDown={(e) => e.stopPropagation()}
           className="fixed z-50 w-48 bg-[#EEF2EF] border border-[#13241F] shadow-xl text-xs overflow-hidden"
         >
+          <div className="border-b border-[#C4CCC7] p-1 bg-white">
+            <button
+              onClick={() => {
+                const next = annotations.filter((_, i) => i !== contextMenu.boxIdx);
+                setSelectedIdx(null);
+                pushHistory(next);
+                setContextMenu(null);
+              }}
+              className="w-full px-2.5 py-1.5 text-left text-[#E8553D] hover:bg-[#E8553D] hover:text-white font-mono-label text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Box
+            </button>
+          </div>
           <div className="px-2.5 py-1.5 bg-[#E2E7E4] border-b border-[#C4CCC7] font-mono-label text-[10px] font-bold text-[#76817B] uppercase flex items-center justify-between">
             <span>Change Label</span>
             <button
@@ -1672,7 +1689,7 @@ export const AnnotationWorkspace: React.FC<Props> = ({
               ✕
             </button>
           </div>
-          <div className="max-h-44 overflow-y-auto divide-y divide-[#C4CCC7]/60">
+          <div className="max-h-40 overflow-y-auto divide-y divide-[#C4CCC7]/60">
             {classes.map((c) => {
               const isCurr = annotations[contextMenu.boxIdx].class_id === c.id;
               return (
@@ -1699,20 +1716,6 @@ export const AnnotationWorkspace: React.FC<Props> = ({
                 </button>
               );
             })}
-          </div>
-          <div className="border-t border-[#C4CCC7] p-1 bg-white">
-            <button
-              onClick={() => {
-                const next = annotations.filter((_, i) => i !== contextMenu.boxIdx);
-                setSelectedIdx(null);
-                pushHistory(next);
-                setContextMenu(null);
-              }}
-              className="w-full px-2 py-1.5 text-left text-[#E8553D] hover:bg-[#E8553D] hover:text-white font-mono-label text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete Box
-            </button>
           </div>
         </div>
       )}
